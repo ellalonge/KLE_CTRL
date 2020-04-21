@@ -1,0 +1,181 @@
+import rtmidi
+import binascii
+import time
+from typing import List, Dict
+
+HEADER = (0xF0, 0x0, 0x20, 0x6B, 0x7F, 0x42)
+LCD_TEXT_HEADER = (0x4, 0x0, 0x60, 0x01)
+LCD_TEXT_NEWLINE = (0x0, 0x2)
+PAD_LIGHT_HEADER = (0x2, 0x0, 0x16)
+BTN_LIGHT_HEADER = (0x2, 0x0, 0x10)
+FOOTER = (0xF7,)
+
+def text2sysex(line1, line2): #Convert text 2 hex
+    ol1 = ()
+    ol2 = ()
+    for letter in line1:
+        ol1 += (ord(letter),)
+    for letter in line2:
+        ol2 += (ord(letter),)
+    return ol1 + LCD_TEXT_NEWLINE + ol2 + (0x0,)
+
+class KLE:
+    buttons = {
+        "MMC_PLAY": 0x5E,
+        "MMC_STOP": 0x5D,
+        "MMC_REC": 0x5F,
+        "MMC_LOOP": 0x56,
+        "MMC_REW": 0x5B,
+        "MMC_FFW": 0x5C,
+        "DAW_SAVE": 0x50,
+        "DAW_UNDO": 0x51,
+        "DAW_PUNCH": 0x58,
+        "DAW_METRO": 0x59,
+        "CTRL_PREV": 0x62,
+        "CTRL_NEXT": 0x63,
+
+        "SE_CAT": 0x16,
+        "SE_PRESET": 0x17,
+        "SE_NEXT": 0x1A,
+        "SE_PREV": 0x1B,
+        "SE_BANK": 0x1C
+    }
+    def __init__(self, controller_out='Arturia KeyLab Essential 61 DAW Out', controller_in='Arturia KeyLab Essential 61 DAW In', midi_in='Arturia KeyLab Essential 61 MIDI In'):
+        self._dawin = rtmidi.MidiIn()
+        self._dawin.open_port(self._dawin.get_ports().index(controller_in))
+        self._midiin = rtmidi.MidiIn()
+        self._midiin.open_port(self._midiin.get_ports().index(midi_in))
+        self._dawout = rtmidi.MidiOut()
+        self._dawout.open_port(self._dawout.get_ports().index(controller_out))
+        self._dawout.send_message((240, 0, 32, 107, 127, 66, 2, 0, 64, 17, 127, 0, 247)) #Pose as Live
+    
+    def updateText(self, line1, line2):
+        print(HEADER + text2sysex(line1, line2) + FOOTER)
+        self._dawout.send_message(
+            HEADER + LCD_TEXT_HEADER + text2sysex(line1, line2) + FOOTER
+        )
+    
+    def btnLightOn(self, button, sysex=False):
+        if isinstance(button, str):
+            if "SE_" in button:
+                self._dawout.send_message(
+                    HEADER + BTN_LIGHT_HEADER + (self.buttons[button], 0x7F) + FOOTER
+                )
+            else:
+                self._dawout.send_message(
+                    (0x90, self.buttons[button], 0x7F)
+                )
+        else:
+            if sysex:
+                self._dawout.send_message(
+                    HEADER + BTN_LIGHT_HEADER + (self.buttons[button], 0x7F) + FOOTER
+                )
+            else:
+                self._dawout.send_message(
+                    (0x90, self.buttons[button], 0x7F)
+                )
+
+    def btnLightOff(self, button, sysex=False):
+        if isinstance(button, str):
+            if "SE_" in button:
+                self._dawout.send_message(
+                    HEADER + BTN_LIGHT_HEADER + (self.buttons[button], 0x0) + FOOTER
+                )
+            else:
+                self._dawout.send_message(
+                    (0x90, self.buttons[button], 0x0)
+                )
+        else:
+            if sysex:
+                self._dawout.send_message(
+                    HEADER + BTN_LIGHT_HEADER + (button, 0x0) + FOOTER
+                )
+            else:
+                self._dawout.send_message(
+                    (0x90, button, 0x0)
+                )
+
+    def padLight(self, padno, colour):
+        print(HEADER + PAD_LIGHT_HEADER + (padno + 0x6F,) + colour + FOOTER)
+        self._dawout.send_message(
+            HEADER + PAD_LIGHT_HEADER + (padno + 0x6F,) + colour + FOOTER
+        )
+
+    def vegasPad(self, padno, t=100, speed=50):
+        r, g, b = (31, 0, 0)
+        for i in range(0, t):
+            if(r > 0 and b == 0):
+                r-=1
+                g+=1
+            if(g > 0 and r == 0):
+                g-=1
+                b+=1
+            if(b > 0 and g == 0):
+                r+=1
+                b-=1
+            self.padLight(padno, (r, g, b))
+            time.sleep(speed/100)
+
+    def vegasPadAll(self, t=100, speed=50):
+        r, g, b = (31, 0, 0)
+        for i in range(0, t):
+            if(r > 0 and b == 0):
+                r-=1
+                g+=1
+            if(g > 0 and r == 0):
+                g-=1
+                b+=1
+            if(b > 0 and g == 0):
+                r+=1
+                b-=1
+            for j in range(1, 9):
+                self.padLight(j, (r, g, b))
+            time.sleep(speed/100)
+
+    def vegasPadAll2(self, t=100, speed=50):
+        rgb = [(),(),(),(),(),(),(),()]
+        for i in range(8):
+            rgb[i] = [31-(i), 0, 0]
+        for j in range(0, t):
+            for i in range(1, 9):
+                if(rgb[i-1][0] > 0 and rgb[i-1][2] == 0):
+                    rgb[i-1][0]-=1
+                    rgb[i-1][1]+=1
+                if(rgb[i-1][1] > 0 and rgb[i-1][0] == 0):
+                    rgb[i-1][1]-=1
+                    rgb[i-1][2]+=1
+                if(rgb[i-1][2] > 0 and rgb[i-1][1] == 0):
+                    rgb[i-1][0]+=1
+                    rgb[i-1][2]-=1
+            
+                self.padLight(i, tuple(rgb[i-1]))
+            time.sleep(speed/100)
+
+    def close(self):
+        self._dawout.send_message((240, 0, 32, 107, 127, 66, 2, 0, 64, 17, 0, 0, 247)) #Remove Live Preset
+    
+    def getDawMessage(self):
+        return self._dawin.get_message()
+    
+    def getMidiMessage(self):
+        return self._midiin.get_message()
+
+class KLE_Control:
+    def __init__(self):
+        self.value = 0
+        pass
+    
+
+class KLE_Button(KLE_Control):
+    pass
+
+class KLE_Fader(KLE_Control):
+    pass
+
+class KLE_Knob(KLE_Control):
+    pass
+
+class KLE_Controls:
+    buttons: List[KLE_Button]
+    faders: List[KLE_Fader]
+    knobs: List[KLE_Knob]
