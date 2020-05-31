@@ -2,7 +2,7 @@ from kle_lib.buttons import KLE_Controls, KLE_Button, KLE_Pad, KLE_Knob, KLE_Fad
 from typing import List, Dict
 import pickle
 #
-#   KeyLab Essentail 61 Defintions
+#   KeyLab Essential 61 Defintions
 #
 
 class KLE_Controls_List:
