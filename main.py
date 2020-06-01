@@ -8,17 +8,12 @@ import sys
 
 kle = KLE()
 
-test = [rtmidi.MidiIn(), rtmidi.MidiOut()]
-test[0].open_virtual_port(name="test")
-test[1].open_virtual_port(name="test")
-
 ms_out = rtmidi.MidiOut()
 ms_out.open_virtual_port(name="KLE MS")
 
 ms_in = rtmidi.MidiIn()
 ms_in.open_virtual_port(name="KLE MS")
 
-#concert = MainStageConcert("/Users/ethan/Music/MainStage/Worship Essentials 2.1 - Example.concert", kle)
 concert = MainStageConcert(sys.argv[1], kle)
 sink = MainStageSink(concert)
 
